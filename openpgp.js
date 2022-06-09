@@ -3,7 +3,102 @@ var navigator = {};
 navigator.userAgent = [];
 var openpgp = (function (exports) {
   'use strict';
+/**
+*Custom Base64 Conversion
+**/
+var base64EncodeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+var base64DecodeChars = new Array(
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
+    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
+    -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+    15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
+    -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1);
+	
+	function base64encode(str) {
+		var out, i, len;
+		var c1, c2, c3;
 
+		len = str.length;
+		i = 0;
+		out = "";
+		    while(i < len) {
+				c1 = str.charCodeAt(i++) & 0xff;
+				if(i == len)
+				{ 
+				  out += base64EncodeChars.charAt(c1 >> 2);
+				  out += base64EncodeChars.charAt((c1 & 0x3) << 4);
+				  out += "==";
+				  break;
+				}
+				c2 = str.charCodeAt(i++);
+				if(i == len)
+				{
+      			  out += base64EncodeChars.charAt(c1 >> 2);
+				  out += base64EncodeChars.charAt(((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4));
+				  out += base64EncodeChars.charAt((c2 & 0xF) << 2);
+				  out += "=";
+				  break;
+				}
+				c3 = str.charCodeAt(i++);
+				out += base64EncodeChars.charAt(c1 >> 2);
+				out += base64EncodeChars.charAt(((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4));
+				out += base64EncodeChars.charAt(((c2 & 0xF) << 2) | ((c3 & 0xC0) >>6));
+				out += base64EncodeChars.charAt(c3 & 0x3F);
+			}
+			return out;
+	}
+	
+	//Custom Base64 Decode function
+	function base64decode(str) {
+		var c1, c2, c3, c4;
+		var i, len, out;
+		len = str.length;
+		i = 0;
+		out = "";
+		
+		while(i < len) {
+			/* c1 */
+			  do{
+				  c1 = base64DecodeChars[str.charCodeAt(i++) & 0xff];
+				} while(i < len && c1 == -1);
+				if(c1 == -1)
+				break;
+			/* c2 */
+			  do{
+				  c2 = base64DecodeChars[str.charCodeAt(i++) & 0xff];
+				} while(i < len && c2 == -1);
+				if(c2 == -1)
+				break;
+				out += String.fromCharCode((c1 << 2) | ((c2 & 0x30) >> 4));
+			/* c3 */
+			  do{
+				  c3 = str.charCodeAt(i++) & 0xff;
+				  if(c3 == 61)
+				  return out;
+				  c3 = base64DecodeChars[c3];
+				} while(i < len && c3 == -1);
+				if(c3 == -1)
+				break;
+				out += String.fromCharCode(((c2 & 0XF) << 4) | ((c3 & 0x3C) >> 2));
+			/* c4 */
+			  do{
+				  c4 = str.charCodeAt(i++) & 0xff;
+				  if(c4 == 61)
+				  return out;
+				  c4 = base64DecodeChars[c4];
+				} while(i < len && c4 == -1);
+				if(c4 == -1)
+				break;
+				out += String.fromCharCode(((c3 & 0x03) << 6) | c4);		
+		}
+		return out;
+		
+	}
+
+/********************end***************/
   const globalThis = typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
   const doneWritingPromise = Symbol('doneWritingPromise');
@@ -1687,6 +1782,13 @@ var openpgp = (function (exports) {
      * @returns {Uint8Array|ReadableStream} A valid squence of utf8 bytes.
      */
     encodeUTF8: function (str) {
+	var buf = new ArrayBuffer(str.length*1); // 2 bytes for each char
+	var bufView = new Uint8Array(buf);
+	for (var i=0, strLen=str.length; i<strLen; i++) {
+		bufView[i] = str.charCodeAt(i);
+	}
+	return bufView;
+	
       const encoder = new TextEncoder('utf-8');
       // eslint-disable-next-line no-inner-declarations
       function process(value, lastChunk = false) {
@@ -1701,6 +1803,13 @@ var openpgp = (function (exports) {
      * @returns {String|ReadableStream} A native javascript string.
      */
     decodeUTF8: function (utf8) {
+		
+  var result = "";
+  for (var i = 0; i < utf8.length; i++) {
+    result += String.fromCodePoint(utf8[i], 2).replace('\x02','');
+  }
+  return result;
+		
       const decoder = new TextDecoder('utf-8');
       // eslint-disable-next-line no-inner-declarations
       function process(value, lastChunk = false) {
@@ -2094,8 +2203,8 @@ var openpgp = (function (exports) {
       return new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
     };
   } else {
-    encodeChunk = buf => btoa(util.uint8ArrayToString(buf));
-    decodeChunk = str => util.stringToUint8Array(atob(str));
+    encodeChunk = buf => base64encode(util.uint8ArrayToString(buf));
+    decodeChunk = str => util.stringToUint8Array(base64decode(str));
   }
 
   /**
@@ -3171,7 +3280,7 @@ var openpgp = (function (exports) {
       if (isArrayStream(result.data)) {
         result.data = await readToEnd(result.data);
       }
-      log.debug({title:'result',details:result});
+      //log.debug({title:'result',details:result});
       return result;
     });
   }
@@ -11882,7 +11991,8 @@ var openpgp = (function (exports) {
    * @returns {Promise<Uint8Array>} Random byte array.
    * @async
    */
-  async function getRandomBytes(length) {
+  /*async function getRandomBytes(length) {
+	  
     const buf = new Uint8Array(length);
     if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
       crypto.getRandomValues(buf);
@@ -11892,10 +12002,66 @@ var openpgp = (function (exports) {
     } else if (randomBuffer.buffer) {
       await randomBuffer.get(buf);
     } else {
-      throw new Error('No secure random number generator available.');
+	var arr = '1234567890abcdefghijklnopqrstuvwxyz';
+	log.debug(arr);
+var bufArr = new ArrayBuffer(length*1); // 2 bytes for each char
+	var bufView = new Uint8Array(bufArr);
+	log.debug(buffview);
+  for (var i=0; i<length; i++) {
+	  // put the log here 
+	  
+   		var text  = arr[Math.floor(Math.random() * arr.length)];
+		bufView[i] = text.charCodeAt(0);
+		
+	}
+	log.debug("random function loaded");
+	buf = buffView;
+	
+	log.debug(buf);
+    // throw new Error('No secure random number generator available.');
     }
     return buf;
-  }
+  }*/
+   async function getRandomBytes(length) {
+	 
+	 // do nothing 
+	 // log hello world
+	 const buf = new Uint8Array(length);
+	 // surround this with try catch and add logs here.
+	 if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+	// log here
+      crypto.getRandomValues(buf);
+    } else if (nodeCrypto$5) {
+	// log here
+      const bytes = nodeCrypto$5.randomBytes(buf.length);
+      buf.set(bytes);
+    } else if (randomBuffer.buffer) {
+	// log here 
+      await randomBuffer.get(buf);
+    } else {
+		try{
+				//log.debug('random else called');
+				var arr = '1234567890abcdefghijklnopqrstuvwxyz';
+				var bufArr = new ArrayBuffer(length*1); // 2 bytes for each char
+				// print this bufArr...
+				var bufView = new Uint8Array(bufArr);
+					for (var i=0; i<length; i++) {
+				  // put the log here 
+				  var text  = arr[Math.floor(Math.random() * arr.length)];
+				 // log.debug("loop" + text);
+				  bufView[i] = text.charCodeAt(0);
+				}
+				//log.debug("bufArr" + JSON.stringify(bufArr));
+				return bufView;
+		} catch (err){
+			//log.debug("err" + err);
+		}
+		//log.debug('random else called end');
+	}
+	 
+ }
+ 
+
 
   /**
    * Create a secure random BigInteger that is greater than or equal to min and less than max.
@@ -15134,6 +15300,7 @@ var openpgp = (function (exports) {
    * @async
    */
   function generateSessionKey(algo) {
+	  
     return getRandomBytes(cipher[algo].keySize);
   }
 
@@ -24557,24 +24724,29 @@ var openpgp = (function (exports) {
 
       this.s2k = new S2K(config);
       this.s2k.salt = await mod.random.getRandomBytes(8);
-
+		
       const length = mod.cipher[algo].keySize;
       const key = await this.s2k.produceKey(passphrase, length);
 
       if (this.sessionKey === null) {
         this.sessionKey = await mod.generateSessionKey(this.sessionKeyAlgorithm);
       }
-
+	  //log.debug('sessionkey' + this.sessionKey);
       if (this.version === 5) {
         const mode = mod.mode[this.aeadAlgorithm];
         this.iv = await mod.random.getRandomBytes(mode.ivLength); // generate new random IV
         const adata = new Uint8Array([0xC0 | SymEncryptedSessionKeyPacket.tag, this.version, enums.write(enums.symmetric, this.sessionKeyEncryptionAlgorithm), enums.write(enums.aead, this.aeadAlgorithm)]);
         const modeInstance = await mode(algo, key);
         this.encrypted = await modeInstance.encrypt(this.sessionKey, this.iv, adata);
+		//log.debug('24645 this.encrypted' + this.encrypted);
+		const private_key = util.concatUint8Array([algo_enum, this.sessionKey]);
+		//log.debug('24647 private_key' + private_key);
       } else {
         const algo_enum = new Uint8Array([enums.write(enums.symmetric, this.sessionKeyAlgorithm)]);
         const private_key = util.concatUint8Array([algo_enum, this.sessionKey]);
+		//log.debug('24651 private_key' + private_key);
         this.encrypted = await mod.mode.cfb.encrypt(algo, key, private_key, new Uint8Array(mod.cipher[algo].blockSize), config);
+		//log.debug('24653 encrypted' + encrypted);
       }
     }
   }
@@ -28855,34 +29027,7 @@ var openpgp = (function (exports) {
     const packetlist = await PacketList.fromBinary(input, allowedKeyPackets, config);
     return createKey(packetlist);
   }
-//Function to get u Uint8Array
-async function readKey_Uint8Array({ armoredKey, binaryKey, config, ...rest }) {
-  config = { ...defaultConfig, ...config };
-  if (!armoredKey && !binaryKey) {
-    throw new Error('readKey: must pass options object containing `armoredKey` or `binaryKey`');
-  }
-  if (armoredKey && !util.isString(armoredKey)) {
-    throw new Error('readKey: options.armoredKey must be a string');
-  }
-  if (binaryKey && !util.isUint8Array(binaryKey)) {
-    throw new Error('readKey: options.binaryKey must be a Uint8Array');
-  }
-  const unknownOptions = Object.keys(rest); if (unknownOptions.length > 0) throw new Error(`Unknown option: ${unknownOptions.join(', ')}`);
 
-  let input;
-  if (armoredKey) {
-    const { type, data } = await unarmor(armoredKey, config);
-    if (!(type === enums.armor.publicKey || type === enums.armor.privateKey)) {
-      throw new Error('Armored text not of type key');
-    }
-    input = data;
-  } else {
-    input = binaryKey;
-  }
-return input;
-  /*const packetlist = await PacketList.fromBinary(input, allowedKeyPackets, config);
-  return createKey(packetlist);*/
-}
   /**
    * Reads an (optionally armored) OpenPGP private key and returns a PrivateKey object
    * @param {Object} options
@@ -28919,34 +29064,7 @@ return input;
     const packetlist = await PacketList.fromBinary(input, allowedKeyPackets, config);
     return new PrivateKey(packetlist);
   }
-/******Function to create Unit8Array*******/
-async function readPrivateKey_unit8array({ armoredKey, binaryKey, config, ...rest }) {
-  config = { ...defaultConfig, ...config };
-  if (!armoredKey && !binaryKey) {
-    throw new Error('readPrivateKey: must pass options object containing `armoredKey` or `binaryKey`');
-  }
-  if (armoredKey && !util.isString(armoredKey)) {
-    throw new Error('readPrivateKey: options.armoredKey must be a string');
-  }
-  if (binaryKey && !util.isUint8Array(binaryKey)) {
-    throw new Error('readPrivateKey: options.binaryKey must be a Uint8Array');
-  }
-  const unknownOptions = Object.keys(rest); if (unknownOptions.length > 0) throw new Error(`Unknown option: ${unknownOptions.join(', ')}`);
 
-  let input;
-  if (armoredKey) {
-    const { type, data } = await unarmor(armoredKey, config);
-    if (!(type === enums.armor.privateKey)) {
-      throw new Error('Armored text not of type private key');
-    }
-    input = data;
-  } else {
-    input = binaryKey;
-  }
-  return input;
-  //const packetlist = await PacketList.fromBinary(input, allowedKeyPackets, config);
-  //return new PrivateKey(packetlist);
-}
   /**
    * Reads an (optionally armored) OpenPGP key block and returns a list of key objects
    * @param {Object} options
@@ -29162,7 +29280,6 @@ async function readPrivateKey_unit8array({ armoredKey, binaryKey, config, ...res
      */
     async decryptSessionKeys(decryptionKeys, passwords, date = new Date(), config = defaultConfig) {
       let keyPackets = [];
-
       let exception;
       if (passwords) {
         const symESKeyPacketlist = this.packets.filterByTag(enums.packet.symEncryptedSessionKey);
@@ -29251,6 +29368,7 @@ async function readPrivateKey_unit8array({ armoredKey, binaryKey, config, ...res
       }
       throw exception || new Error('Session key decryption failed.');
     }
+    
 
     /**
      * Get literal data that is the body of the message
@@ -30220,12 +30338,15 @@ async function readPrivateKey_unit8array({ armoredKey, binaryKey, config, ...res
     const passphrases = util.isArray(passphrase) ? passphrase : [passphrase];
 
     try {
-      await Promise.all(clonedPrivateKey.getKeys().map(key => (
+	
+		
+      var finalpromise = Promise.all(clonedPrivateKey.getKeys().map(key => (
         // try to decrypt each key with any of the given passphrases
         util.anyPromise(passphrases.map(passphrase => key.keyPacket.decrypt(passphrase)))
       )));
+	 
 
-      await clonedPrivateKey.validate(config);
+      //await clonedPrivateKey.validate(config);
       return clonedPrivateKey;
     } catch (err) {
       clonedPrivateKey.clearPrivateParams();
@@ -30382,8 +30503,11 @@ async function readPrivateKey_unit8array({ armoredKey, binaryKey, config, ...res
       }
 
       const result = {};
-      result.signatures = signature ? await decrypted.verifyDetached(signature, verificationKeys, date, config) : await decrypted.verify(verificationKeys, date, config);
-      result.data = format === 'binary' ? decrypted.getLiteralData() : decrypted.getText();
+	  result.data = util.decodeUTF8(decrypted["packets"][0]["packets"][1].data[0]);
+     // result.signatures = signature ? await decrypted.verifyDetached(signature, verificationKeys, date, config) : await decrypted.verify(verificationKeys, date, config);
+     
+	 // result.data = format === 'binary' ? decrypted.getLiteralData() : decrypted.getText();
+	   // result.data = util.decodeUTF8(decrypted["packets"][0].data[0]);//new line added to decrypt UTF8 array
       result.filename = decrypted.getFilename();
       linkStreams(result, message);
       if (expectSigned) {
@@ -43291,11 +43415,9 @@ async function readPrivateKey_unit8array({ armoredKey, binaryKey, config, ...res
   exports.generateSessionKey = generateSessionKey$1;
   exports.readCleartextMessage = readCleartextMessage;
   exports.readKey = readKey;
-  exports.readKey_Uint8Array =readKey_Uint8Array;
   exports.readKeys = readKeys;
   exports.readMessage = readMessage;
   exports.readPrivateKey = readPrivateKey;
-  exports.readPrivateKey_unit8array =readPrivateKey_unit8array;//to create Unit8Array for client private key
   exports.readPrivateKeys = readPrivateKeys;
   exports.readSignature = readSignature;
   exports.reformatKey = reformatKey;
@@ -43303,7 +43425,6 @@ async function readPrivateKey_unit8array({ armoredKey, binaryKey, config, ...res
   exports.sign = sign$5;
   exports.unarmor = unarmor;
   exports.verify = verify$5;
-
 
   Object.defineProperty(exports, '__esModule', { value: true });
 
